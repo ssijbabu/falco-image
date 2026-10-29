@@ -44,16 +44,24 @@ steps:
       uname -r
     displayName: Show Docker and kernel versions
 
-  # Builds for the agent's platform (linux/amd64), pulling fresh base images,
-  # then runs smoke-test.sh, including the privileged runtime test
+  # Builds for the agent's platform (linux/amd64), pulling fresh base images
   - script: bash ./build.sh
-    displayName: Build and smoke test
+    displayName: Build image
     env:
       CONTAINER_TOOL: docker
       IMAGE: $(IMAGE)
       TAG: $(TAG)
       FALCO_VERSION: $(FALCO_VERSION)
       PULL: "1"
+
+  # Static checks plus the privileged runtime test that triggers the custom rule
+  - script: bash ./smoke-test.sh
+    displayName: Smoke test
+    env:
+      CONTAINER_TOOL: docker
+      IMAGE: $(IMAGE)
+      TAG: $(TAG)
+      FALCO_VERSION: $(FALCO_VERSION)
 
   - script: docker image ls "$(IMAGE)"
     displayName: Image details

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Falco image and run the smoke test against it.
+# Build the Falco image. Run ./smoke-test.sh afterwards to test it.
 #
 # Usage:
 #   ./build.sh                          # build for this machine's platform
@@ -13,8 +13,6 @@
 #   TAG              image tag (default: $FALCO_VERSION)
 #   PLATFORM         target platform, e.g. linux/amd64 (default: native)
 #   PULL=1           always pull the latest base images
-#   SKIP_TESTS=1     build only
-#   SKIP_RUNTIME_TEST=1  passed through to smoke-test.sh
 
 set -euo pipefail
 
@@ -56,23 +54,3 @@ fi
 
 echo "==> Building ${REF} with ${CONTAINER_TOOL}${PLATFORM:+ for ${PLATFORM}}"
 "$CONTAINER_TOOL" build "${build_args[@]}" -t "$REF" .
-
-if [[ "${SKIP_TESTS:-0}" == 1 ]]; then
-  echo "==> Skipping smoke test"
-  exit 0
-fi
-
-# The runtime test loads the kernel driver, which needs the image to match the
-# host kernel's architecture
-native_arch="$("$CONTAINER_TOOL" info --format '{{.Architecture}}' 2>/dev/null || true)"
-image_arch="$("$CONTAINER_TOOL" image inspect --format '{{.Architecture}}' "$REF")"
-case "$native_arch" in
-  x86_64) native_arch=amd64 ;;
-  aarch64) native_arch=arm64 ;;
-esac
-if [[ "$image_arch" != "$native_arch" ]]; then
-  echo "==> Image is ${image_arch}, host is ${native_arch}: skipping runtime test"
-  export SKIP_RUNTIME_TEST=1
-fi
-
-CONTAINER_TOOL="$CONTAINER_TOOL" ./smoke-test.sh "$REF"

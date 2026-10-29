@@ -2,17 +2,35 @@
 # Smoke test for the Falco image.
 #
 # Usage:
-#   ./smoke-test.sh [image]             # default image: falco:0.45.1
+#   ./smoke-test.sh                     # tests ${IMAGE}:${TAG}, same defaults as build.sh
+#   ./smoke-test.sh falco:0.45.1        # or an explicit image reference
 #
 # Environment:
-#   CONTAINER_TOOL       docker or podman (default: docker)
+#   CONTAINER_TOOL       docker or podman (default: docker if it is running, else podman)
+#   IMAGE                image name (default: falco)
+#   FALCO_VERSION        used for the default tag (default: 0.45.1)
+#   TAG                  image tag (default: $FALCO_VERSION)
 #   SKIP_RUNTIME_TEST=1  only run the static checks (no privileged container)
 #   RUNTIME_TIMEOUT      seconds to wait for Falco to start / alert (default: 60)
 
 set -euo pipefail
 
-REF="${1:-falco:0.45.1}"
-CT="${CONTAINER_TOOL:-docker}"
+if [[ -z "${CONTAINER_TOOL:-}" ]]; then
+  if docker info >/dev/null 2>&1; then
+    CONTAINER_TOOL=docker
+  elif podman info >/dev/null 2>&1; then
+    CONTAINER_TOOL=podman
+  else
+    echo "error: neither docker nor podman is running" >&2
+    exit 1
+  fi
+fi
+
+IMAGE="${IMAGE:-falco}"
+FALCO_VERSION="${FALCO_VERSION:-0.45.1}"
+TAG="${TAG:-$FALCO_VERSION}"
+REF="${1:-${IMAGE}:${TAG}}"
+CT="$CONTAINER_TOOL"
 RUNTIME_TIMEOUT="${RUNTIME_TIMEOUT:-60}"
 CUSTOM_RULE="Package Manager Run in Container"
 
@@ -23,6 +41,25 @@ bad()  { echo "  FAIL  $*"; fail=$((fail + 1)); }
 step() { echo; echo "==> $*"; }
 
 run() { "$CT" run --rm "$REF" "$@"; }
+
+if ! "$CT" image inspect "$REF" >/dev/null 2>&1; then
+  echo "error: image ${REF} not found, run ./build.sh first" >&2
+  exit 1
+fi
+echo "==> Smoke testing ${REF} with ${CT}"
+
+# The runtime test loads the kernel driver, which needs the image to match the
+# host kernel's architecture
+native_arch="$("$CT" info --format '{{.Architecture}}' 2>/dev/null || true)"
+image_arch="$("$CT" image inspect --format '{{.Architecture}}' "$REF")"
+case "$native_arch" in
+  x86_64) native_arch=amd64 ;;
+  aarch64) native_arch=arm64 ;;
+esac
+if [[ "$image_arch" != "$native_arch" ]]; then
+  echo "==> Image is ${image_arch}, host is ${native_arch}: skipping runtime test"
+  SKIP_RUNTIME_TEST=1
+fi
 
 # ---- Static checks: no privileges or kernel access needed ----
 
