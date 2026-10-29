@@ -1,0 +1,13 @@
+# Example custom rule. Every *.yaml file in this directory is copied into
+# /etc/falco/rules.d and loaded after the upstream rulesets, so macros and
+# lists from falco_rules.yaml (e.g. spawned_process, container) are available.
+
+- list: custom_package_managers
+  items: [dnf, microdnf, yum, rpm, apt, apt-get, dpkg, apk, pip, pip3, npm]
+
+- rule: Package Manager Run in Container
+  desc: Detect a package manager being run inside a running container, which suggests drift from the built image.
+  condition: spawned_process and container and proc.name in (custom_package_managers)
+  output: Package manager run in container (user=%user.name command=%proc.cmdline container_id=%container.id container_name=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [custom, container, mitre_persistence]
