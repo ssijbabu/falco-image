@@ -1,0 +1,60 @@
+# Build the Falco image and run the smoke test.
+# Runs on changes to main and on the 1st of every month, so the image is
+# rebuilt against the latest base images even when nothing in the repo changed.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - Dockerfile
+      - rules/*
+      - config/*
+      - build.sh
+      - smoke-test.sh
+      - azure-pipelines.yml
+
+pr:
+  branches:
+    include:
+      - main
+
+schedules:
+  - cron: "0 3 1 * *" # 03:00 UTC on the 1st of each month
+    displayName: Monthly rebuild
+    branches:
+      include:
+        - main
+    always: true # run even if there are no new commits
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  FALCO_VERSION: 0.45.1
+  IMAGE: falco
+  TAG: $(FALCO_VERSION)-$(Build.BuildId)
+
+steps:
+  - checkout: self
+
+  - script: |
+      docker version
+      uname -r
+    displayName: Show Docker and kernel versions
+
+  # Builds for the agent's platform (linux/amd64), pulling fresh base images,
+  # then runs smoke-test.sh, including the privileged runtime test
+  - script: bash ./build.sh
+    displayName: Build and smoke test
+    env:
+      CONTAINER_TOOL: docker
+      IMAGE: $(IMAGE)
+      TAG: $(TAG)
+      FALCO_VERSION: $(FALCO_VERSION)
+      PULL: "1"
+
+  - script: docker image ls "$(IMAGE)"
+    displayName: Image details
+    condition: succeededOrFailed()

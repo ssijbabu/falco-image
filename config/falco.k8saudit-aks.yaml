@@ -1,0 +1,22 @@
+# Enable the k8saudit-aks plugin (AKS audit logs from Azure Event Hub) and the
+# json plugin required by the k8s audit rules. Merged into falco.yaml with the
+# append strategy, so these entries are added next to the container plugin.
+#
+# Connection details are resolved from environment variables at startup so no
+# secrets are baked into the image. Falco fails to start if they are missing.
+load_plugins: [k8saudit-aks, json]
+
+plugins:
+  - name: k8saudit-aks
+    library_path: libk8saudit-aks.so
+    init_config:
+      event_hub_namespace_connection_string: ${AKS_EVENTHUB_CONNECTION_STRING}
+      event_hub_name: ${AKS_EVENTHUB_NAME}
+      blob_storage_connection_string: ${AKS_BLOB_CONNECTION_STRING}
+      blob_storage_container_name: ${AKS_BLOB_CONTAINER_NAME}
+      rate_limit_events_per_second: 100
+      rate_limit_burst: 200
+    open_params: ""
+  - name: json
+    library_path: libjson.so
+    init_config: ""
